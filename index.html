@@ -42,29 +42,7 @@
             touch-action: none;
         }
 
-        .jump-btn {
-            display: none;
-            position: absolute;
-            bottom: 12px;
-            right: 12px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            font-size: 13px;
-            padding: 0;
-            align-items: center;
-            justify-content: center;
-            background: var(--accent);
-            color: #000;
-            border: none;
-            box-shadow: 4px 4px 0px #fff;
-            opacity: 0.95;
-            z-index: 6;
-            touch-action: none;
-        }
-
         @media (max-width: 600px) {
-            .jump-btn { display: flex; }
             #hud { font-size: 14px; top: 8px; left: 8px; }
             .ui-layer { padding: 12px; }
         }
@@ -150,6 +128,11 @@
             <div style="display:flex;gap:12px;flex-direction:column;align-items:center;">
                 <button class="btn" id="startBtn">START GRINDING</button>
             </div>
+        </div>
+
+        <div id="rotateNotice" class="ui-layer hidden">
+            <h1>Rotate Device</h1>
+            <p>Please rotate your device to landscape to play.</p>
         </div>
 
         <div id="gameOverScreen" class="ui-layer hidden">
@@ -277,20 +260,29 @@
                 game.start();
             });
 
-            // initial canvas sizing and wire resize
+            // initial canvas sizing and wire resize + orientation check
             fitCanvas();
-            window.addEventListener('resize', fitCanvas);
-
-            // create a mobile jump button (visible on narrow screens)
-            const jumpBtn = document.createElement('button');
-            jumpBtn.className = 'btn jump-btn';
-            jumpBtn.id = 'jumpBtn';
-            jumpBtn.innerText = 'JUMP';
-            jumpBtn.addEventListener('pointerdown', e => { e.preventDefault(); keys.space = true; unlockAudio(); });
-            jumpBtn.addEventListener('pointerup', e => { e.preventDefault(); keys.space = false; });
-            jumpBtn.addEventListener('pointercancel', () => { keys.space = false; });
-            const gc = document.getElementById('game-container');
-            if (gc) gc.appendChild(jumpBtn);
+            function checkOrientation() {
+                const rotateEl = document.getElementById('rotateNotice');
+                if (window.innerWidth < window.innerHeight) {
+                    // portrait — ask user to rotate and pause game if running
+                    if (rotateEl) rotateEl.classList.remove('hidden');
+                    if (typeof game !== 'undefined' && game && game.isRunning) {
+                        game._wasRunning = true;
+                        game.isRunning = false;
+                    }
+                } else {
+                    if (rotateEl) rotateEl.classList.add('hidden');
+                    fitCanvas();
+                    if (typeof game !== 'undefined' && game && game._wasRunning) {
+                        game.isRunning = true;
+                        game._wasRunning = false;
+                        requestAnimationFrame(animate);
+                    }
+                }
+            }
+            checkOrientation();
+            window.addEventListener('resize', () => { fitCanvas(); checkOrientation(); });
         });
 
         // --- CLASSES ---
