@@ -130,11 +130,6 @@
             </div>
         </div>
 
-        <div id="rotateNotice" class="ui-layer hidden">
-            <h1>Rotate Device</h1>
-            <p>Please rotate your device to landscape to play.</p>
-        </div>
-
         <div id="gameOverScreen" class="ui-layer hidden">
             <h1 style="color: var(--danger)">Disappointed</h1>
             <p>Rejection Letter Received.</p>
@@ -168,9 +163,9 @@
 
         function fitCanvas() {
             const dpr = window.devicePixelRatio || 1;
-            // compute CSS size constrained to viewport while preserving aspect
-            const maxCssW = Math.min(WIDTH, window.innerWidth - 20);
-            const maxCssH = Math.min(HEIGHT, window.innerHeight - 80);
+            // compute CSS size constrained to the full viewport while preserving aspect
+            const maxCssW = window.innerWidth;
+            const maxCssH = window.innerHeight;
             let cssW = maxCssW;
             let cssH = Math.round(cssW * HEIGHT / WIDTH);
             if (cssH > maxCssH) {
@@ -253,36 +248,30 @@
         // Start button binding (use shipped avatar only) — also unlock audio on user gesture
         document.addEventListener('DOMContentLoaded', () => {
             const startBtn = document.getElementById('startBtn');
-            startBtn.addEventListener('click', () => {
+            startBtn.addEventListener('click', async () => {
                 unlockAudio();
                 if (!game) game = new Game();
                 if (!game.avatar && typeof defaultAvatar !== 'undefined') game.avatar = defaultAvatar;
+                // Request fullscreen then try to lock orientation to landscape (works in many mobile browsers when in fullscreen)
+                try {
+                    const gc = document.getElementById('game-container');
+                    if (gc && gc.requestFullscreen) await gc.requestFullscreen();
+                } catch (e) {}
+                try {
+                    if (screen.orientation && screen.orientation.lock) {
+                        await screen.orientation.lock('landscape').catch(() => {});
+                    } else if (screen.lockOrientation) {
+                        try { screen.lockOrientation('landscape'); } catch (e) {}
+                    }
+                } catch (e) {}
+
+                fitCanvas();
                 game.start();
             });
 
-            // initial canvas sizing and wire resize + orientation check
+            // initial canvas sizing and wire resize
             fitCanvas();
-            function checkOrientation() {
-                const rotateEl = document.getElementById('rotateNotice');
-                if (window.innerWidth < window.innerHeight) {
-                    // portrait — ask user to rotate and pause game if running
-                    if (rotateEl) rotateEl.classList.remove('hidden');
-                    if (typeof game !== 'undefined' && game && game.isRunning) {
-                        game._wasRunning = true;
-                        game.isRunning = false;
-                    }
-                } else {
-                    if (rotateEl) rotateEl.classList.add('hidden');
-                    fitCanvas();
-                    if (typeof game !== 'undefined' && game && game._wasRunning) {
-                        game.isRunning = true;
-                        game._wasRunning = false;
-                        requestAnimationFrame(animate);
-                    }
-                }
-            }
-            checkOrientation();
-            window.addEventListener('resize', () => { fitCanvas(); checkOrientation(); });
+            window.addEventListener('resize', fitCanvas);
         });
 
         // --- CLASSES ---
