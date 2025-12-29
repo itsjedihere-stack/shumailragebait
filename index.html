@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Unemployed Boss Fight</title>
+    <style>
+        /* --- PROFESSIONAL STYLING --- */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #202028;
+            --accent: #00ffcc;
+            --text-color: #ffffff;
+            --danger: #ff4757;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(0, 255, 204, 0.2);
+            border: 4px solid var(--accent);
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #2b32b2, #1488cc); /* Sky gradient */
+            touch-action: none;
+        }
+
+        .jump-btn {
+            display: none;
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            font-size: 13px;
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            box-shadow: 4px 4px 0px #fff;
+            opacity: 0.95;
+            z-index: 6;
+            touch-action: none;
+        }
+
+        @media (max-width: 600px) {
+            .jump-btn { display: flex; }
+            #hud { font-size: 14px; top: 8px; left: 8px; }
+            .ui-layer { padding: 12px; }
+        }
+
+        /* UI OVERLAYS */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            text-align: center;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-family: 'Press Start 2P', cursive;
+            color: var(--accent);
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            line-height: 1.5;
+            text-shadow: 4px 4px 0px #000;
+        }
+
+        p {
+            font-size: 18px;
+            color: #ccc;
+            margin-bottom: 30px;
+            max-width: 80%;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 14px;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            cursor: pointer;
+            box-shadow: 4px 4px 0px #fff;
+            transition: transform 0.1s;
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px #fff;
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 16px;
+            color: white;
+            z-index: 5;
+            text-shadow: 2px 2px 0 #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="hud">
+            OFFERS: <span id="scoreVal">0</span>/20 <span id="effects"></span>
+        </div>
+
+        <div id="startScreen" class="ui-layer">
+            <h1>LEVEL: UNEMPLOYED FINAL BOSS</h1>
+            <p>Help <b>Birthday Boy Shumail</b> collect Job Offers and dodge the Rejection Letters.</p>
+            <div style="display:flex;gap:12px;flex-direction:column;align-items:center;">
+                <button class="btn" id="startBtn">START GRINDING</button>
+            </div>
+        </div>
+
+        <div id="gameOverScreen" class="ui-layer hidden">
+            <h1 style="color: var(--danger)">Disappointed</h1>
+            <p>Rejection Letter Received.</p>
+            <button class="btn" onclick="game.reset()">APPLY AGAIN</button>
+        </div>
+
+        <div id="winScreen" class="ui-layer hidden">
+            <h1 style="color: gold">Ronaldo is the Goat</h1>
+            <p>SSSSSSSUUUUUUUIIIIIIIIIIIIII</p>
+            <button class="btn" onclick="game.reset()">PLAY AGAIN</button>
+        </div>
+
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+        /* --- GAME ENGINE --- */
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game Constants
+        const WIDTH = 800;
+        const HEIGHT = 450;
+        const GRAVITY = 0.6;
+        
+        // logical game resolution stays constant for physics (800x450)
+        // the displayed size and pixel buffer are adjusted for devicePixelRatio
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+
+        function fitCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            // compute CSS size constrained to viewport while preserving aspect
+            const maxCssW = Math.min(WIDTH, window.innerWidth - 20);
+            const maxCssH = Math.min(HEIGHT, window.innerHeight - 80);
+            let cssW = maxCssW;
+            let cssH = Math.round(cssW * HEIGHT / WIDTH);
+            if (cssH > maxCssH) {
+                cssH = maxCssH;
+                cssW = Math.round(cssH * WIDTH / HEIGHT);
+            }
+
+            canvas.style.width = cssW + 'px';
+            canvas.style.height = cssH + 'px';
+
+            // pixel buffer scaled by DPR while keeping logical coords as WIDTH/HEIGHT
+            canvas.width = Math.round(WIDTH * dpr);
+            canvas.height = Math.round(HEIGHT * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            const container = document.getElementById('game-container');
+            if (container) {
+                container.style.width = canvas.style.width;
+                container.style.height = canvas.style.height;
+            }
+        }
+
+        // Preload default avatar from shipped file
+        const defaultAvatar = new Image();
+        defaultAvatar.src = 'shumail/friend.png';
+
+        // --- Sound (WebAudio) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let audioUnlocked = false;
+
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => { audioUnlocked = true; }).catch(() => { audioUnlocked = true; });
+            } else {
+                audioUnlocked = true;
+            }
+        }
+
+        function playTone(freq, type = 'sine', duration = 0.15, volume = 0.12) {
+            try {
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                g.gain.setValueAtTime(volume, audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                o.connect(g);
+                g.connect(audioCtx.destination);
+                o.start();
+                o.stop(audioCtx.currentTime + duration + 0.02);
+            } catch (e) {
+                // ignore if audio unavailable
+            }
+        }
+
+        function playJumpSound() { if (!audioUnlocked) return; playTone(650, 'sine', 0.12, 0.06); }
+        function playCollectSound() { if (!audioUnlocked) return; playTone(880, 'triangle', 0.18, 0.12); }
+        function playHitSound() { if (!audioUnlocked) return; playTone(120, 'sawtooth', 0.28, 0.18); }
+        function playWinSound() { if (!audioUnlocked) return; playTone(900, 'triangle', 0.14, 0.12); setTimeout(() => playTone(1100, 'triangle', 0.14, 0.12), 160); }
+
+        // Input Handling
+        const keys = { space: false };
+        window.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); keys.space = true; } });
+        window.addEventListener('keyup', e => { if (e.code === 'Space') { e.preventDefault(); keys.space = false; } });
+
+        // pointer/touch-friendly input: tap/click canvas to jump
+        canvas.addEventListener('pointerdown', e => {
+            // only respond to primary button for mouse
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            e.preventDefault();
+            keys.space = true;
+            unlockAudio();
+        });
+        canvas.addEventListener('pointerup', e => { e.preventDefault(); keys.space = false; });
+        canvas.addEventListener('pointercancel', e => { keys.space = false; });
+        // ensure pointerup anywhere clears the jump (helps on mobile)
+        document.addEventListener('pointerup', () => { keys.space = false; });
+
+        // Start button binding (use shipped avatar only) — also unlock audio on user gesture
+        document.addEventListener('DOMContentLoaded', () => {
+            const startBtn = document.getElementById('startBtn');
+            startBtn.addEventListener('click', () => {
+                unlockAudio();
+                if (!game) game = new Game();
+                if (!game.avatar && typeof defaultAvatar !== 'undefined') game.avatar = defaultAvatar;
+                game.start();
+            });
+
+            // initial canvas sizing and wire resize
+            fitCanvas();
+            window.addEventListener('resize', fitCanvas);
+
+            // create a mobile jump button (visible on narrow screens)
+            const jumpBtn = document.createElement('button');
+            jumpBtn.className = 'btn jump-btn';
+            jumpBtn.id = 'jumpBtn';
+            jumpBtn.innerText = 'JUMP';
+            jumpBtn.addEventListener('pointerdown', e => { e.preventDefault(); keys.space = true; unlockAudio(); });
+            jumpBtn.addEventListener('pointerup', e => { e.preventDefault(); keys.space = false; });
+            jumpBtn.addEventListener('pointercancel', () => { keys.space = false; });
+            const gc = document.getElementById('game-container');
+            if (gc) gc.appendChild(jumpBtn);
+        });
+
+        // --- CLASSES ---
+
+        class Player {
+            constructor() {
+                this.width = 50;
+                this.height = 50;
+                this.x = 100;
+                this.y = HEIGHT - 100;
+                this.dy = 0;
+                this.jumpForce = -12;
+                this.grounded = false;
+                this.color = '#00ffcc';
+            }
+
+            update() {
+                // Jump Logic
+                if (keys.space && this.grounded) {
+                    this.dy = this.jumpForce;
+                    this.grounded = false;
+                    try { playJumpSound(); } catch (e) {}
+                }
+
+                // Gravity
+                this.dy += GRAVITY;
+                this.y += this.dy;
+
+                // Floor Collision
+                if (this.y + this.height > HEIGHT - 20) {
+                    this.y = HEIGHT - 20 - this.height;
+                    this.dy = 0;
+                    this.grounded = true;
+                }
+            }
+
+            draw() {
+                // Draw avatar image if provided, otherwise emoji avatar
+                // prefer user-uploaded avatar, otherwise use preloaded default image, otherwise emoji
+                const imgToDraw = (game && game.avatar) ? game.avatar : (typeof defaultAvatar !== 'undefined' ? defaultAvatar : null);
+                if (imgToDraw) {
+                    try {
+                        ctx.drawImage(imgToDraw, this.x, this.y, this.width, this.height);
+                    } catch (e) {
+                        ctx.font = "45px Arial";
+                        ctx.fillText("👨‍💻", this.x, this.y + 40);
+                    }
+                } else {
+                    ctx.font = "45px Arial";
+                    ctx.fillText("👨‍💻", this.x, this.y + 40);
+                }
+            }
+        }
+
+        class Obstacle {
+            constructor(type) {
+                this.width = 40;
+                this.height = 40;
+                // spawn a bit off-screen so enemies come into view
+                this.x = WIDTH + 40 + Math.random() * 220;
+                this.y = HEIGHT - 65; // Ground level
+                this.type = type; // 'enemy' or 'cake'
+                this.speed = 6 + ((typeof game !== 'undefined' ? game.score : 0) * 0.5); // Gets faster
+                this.markedForDeletion = false;
+                
+                // If it's a cake/offer, it might float higher
+                if (this.type === 'cake') {
+                    // place cakes at reachable heights near the ground
+                    this.y = HEIGHT - (80 + Math.random() * 60); // between HEIGHT-140 and HEIGHT-80
+                }
+            }
+
+            update() {
+                // Apply global slow factor if active
+                const slowFactor = (typeof game !== 'undefined' && game.slowFactor) ? game.slowFactor : 1;
+                this.x -= this.speed * slowFactor;
+                if (this.x < -this.width) this.markedForDeletion = true;
+            }
+
+            draw() {
+                ctx.font = "40px Arial";
+                if (this.type === 'enemy') {
+                    ctx.fillText("📄", this.x, this.y + 35); // Rejection Letter
+                } else if (this.type === 'cake') {
+                    ctx.fillText("🎂", this.x, this.y + 35); // Job Offer / Cake
+                } else if (this.type === 'flying') {
+                    ctx.fillText("🦅", this.x, this.y + 35);
+                } else if (this.type === 'chaser') {
+                    ctx.fillText("👾", this.x, this.y + 35);
+                } else if (this.type === 'power_slow') {
+                    ctx.fillText("⏱️", this.x, this.y + 35);
+                } else if (this.type === 'power_shield') {
+                    ctx.fillText("🛡️", this.x, this.y + 35);
+                } else {
+                    ctx.fillText("❓", this.x, this.y + 35);
+                }
+            }
+        }
+
+        // Flying enemy - sine-wave vertical motion
+        class FlyingEnemy extends Obstacle {
+            constructor() {
+                super('flying');
+                // keep flying enemies below midline so player can reach them by jump
+                const minY = HEIGHT * 0.5 + 10; // just below 50% of game height
+                const maxY = HEIGHT - 120; // well above the floor but reachable
+                this.baseY = Math.random() * (maxY - minY) + minY;
+                this.amplitude = Math.random() * 12 + 6; // subtle vertical motion
+                this.freq = Math.random() * 0.04 + 0.02;
+                this.phase = Math.random() * Math.PI * 2;
+                // keep speed modest so they move in and linger
+                this.speed *= 0.9;
+            }
+
+            update() {
+                this.phase += this.freq;
+                this.y = this.baseY + Math.sin(this.phase) * this.amplitude;
+                // ensure flying enemy never drifts above the midline
+                const minY = HEIGHT * 0.5 + 6;
+                if (this.y < minY) this.y = minY;
+                super.update();
+            }
+        }
+
+        // Chaser enemy - follows the player's vertical position when near
+        class ChaserEnemy extends Obstacle {
+            constructor() {
+                super('chaser');
+                // spawn within lower half so player can interact and jump
+                const minY = HEIGHT * 0.5 + 10;
+                const maxY = HEIGHT - 120;
+                this.y = Math.random() * (maxY - minY) + minY;
+                // chaser should not be too aggressive horizontally
+                this.speed = Math.max(3, (this.speed || 5) * 0.9);
+                this._vFollow = 0.9; // vertical follow smoothing
+            }
+
+            update() {
+                // Gentle vertical follow towards player when on-screen
+                if (typeof game !== 'undefined' && game.player) {
+                    const targetY = game.player.y;
+                    const dy = targetY - this.y;
+                    // move a little towards the player each frame (clamped)
+                    this.y += Math.sign(dy) * Math.min(Math.abs(dy), this._vFollow);
+                    // constrain within lower half
+                    const minY = HEIGHT * 0.5 + 6;
+                    const maxY = HEIGHT - 60;
+                    if (this.y < minY) this.y = minY;
+                    if (this.y > maxY) this.y = maxY;
+                }
+
+                // horizontal movement handled by base class
+                super.update();
+
+                // If the chaser gets somewhat near the player horizontally, nudge it a bit faster to close the gap
+                if (typeof game !== 'undefined' && game.player && this.x - game.player.x < 300) {
+                    this.x -= 0.6; // small extra approach
+                }
+            }
+        }
+
+        // Power-up items
+        class PowerUp extends Obstacle {
+            constructor(kind) {
+                super(kind === 'slow' ? 'power_slow' : 'power_shield');
+                this.kind = kind;
+                // float nearer to the ground but reachable
+                this.y = HEIGHT - (100 + Math.random() * 40);
+                this.speed *= 0.8;
+            }
+
+            update() {
+                super.update();
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.player = new Player();
+                this.obstacles = [];
+                this.particles = [];
+                this.score = 0;
+                this.isRunning = false;
+                this.spawnTimer = 0;
+                this.spawnInterval = 90; // Frames between spawns
+                this.slowFactor = 1;
+                this.slowTimer = 0;
+                this.shieldActive = false;
+                this.shieldTimer = 0;
+                // simple parallax clouds
+                this.clouds = [];
+                for (let i = 0; i < 6; i++) {
+                    this.clouds.push({ x: Math.random() * WIDTH, y: Math.random() * 120 + 20, r: Math.random() * 30 + 20, speed: Math.random() * 0.3 + 0.2 });
+                }
+            }
+
+            start() {
+                if (this.isRunning) return;
+                this.resetVariables();
+                this.isRunning = true;
+                document.getElementById('startScreen').classList.add('hidden');
+                document.getElementById('gameOverScreen').classList.add('hidden');
+                document.getElementById('winScreen').classList.add('hidden');
+                requestAnimationFrame(animate);
+            }
+
+            reset() {
+                this.start();
+            }
+
+            resetVariables() {
+                this.player = new Player();
+                this.obstacles = [];
+                this.score = 0;
+                this.spawnTimer = 0;
+                this.spawnInterval = 90;
+                this.updateScore();
+            }
+
+            updateScore() {
+                document.getElementById('scoreVal').innerText = this.score;
+            }
+
+            gameOver() {
+                this.isRunning = false;
+                try { playHitSound(); } catch (e) {}
+                document.getElementById('gameOverScreen').classList.remove('hidden');
+            }
+
+            win() {
+                this.isRunning = false;
+                try { playWinSound(); } catch (e) {}
+                document.getElementById('winScreen').classList.remove('hidden');
+            }
+
+            update() {
+                this.player.update();
+
+                // Effects timers
+                if (this.slowTimer > 0) {
+                    this.slowTimer--;
+                    if (this.slowTimer <= 0) this.slowFactor = 1;
+                }
+                if (this.shieldTimer > 0) {
+                    this.shieldTimer--;
+                    if (this.shieldTimer <= 0) this.shieldActive = false;
+                }
+
+                // update HUD effects
+                const effectsEl = document.getElementById('effects');
+                if (effectsEl) {
+                    let txt = '';
+                    if (this.shieldActive) txt += ' 🛡️';
+                    if (this.slowFactor < 1) txt += ' ⏱️';
+                    effectsEl.innerText = txt;
+                }
+
+                // Clouds
+                this.clouds.forEach(c => { c.x -= c.speed; if (c.x < -c.r * 2) c.x = WIDTH + c.r * 2; });
+
+                // Spawning Logic
+                this.spawnTimer++;
+                if (this.spawnTimer > this.spawnInterval) {
+                    // Weighted spawn: cake 25%, enemy 40%, flying 10%, chaser 10%, power_slow 7.5%, power_shield 7.5%
+                    const r = Math.random();
+                    let spawned = null;
+                    if (r < 0.25) {
+                        spawned = new Obstacle('cake');
+                    } else if (r < 0.65) {
+                        spawned = new Obstacle('enemy');
+                    } else if (r < 0.75) {
+                        spawned = new FlyingEnemy();
+                    } else if (r < 0.85) {
+                        spawned = new ChaserEnemy();
+                    } else if (r < 0.925) {
+                        spawned = new PowerUp('slow');
+                    } else {
+                        spawned = new PowerUp('shield');
+                    }
+                    this.obstacles.push(spawned);
+                    this.spawnTimer = 0;
+                    // Make it harder as game goes on
+                    if (this.spawnInterval > 40) this.spawnInterval--;
+                }
+
+                // Obstacle Logic
+                this.obstacles.forEach(obs => {
+                    obs.update();
+                    
+                    // Collision Detection
+                    if (
+                        this.player.x < obs.x + obs.width &&
+                        this.player.x + this.player.width > obs.x &&
+                        this.player.y < obs.y + obs.height &&
+                        this.player.y + this.player.height > obs.y
+                    ) {
+                        // Power-ups
+                        if (obs.type === 'power_slow' || obs.type === 'power_shield') {
+                            obs.markedForDeletion = true;
+                            if (obs.type === 'power_slow') {
+                                this.slowFactor = 0.5;
+                                this.slowTimer = 300; // ~5 seconds
+                                try { playCollectSound(); } catch (e) {}
+                            } else {
+                                this.shieldActive = true;
+                                this.shieldTimer = 600; // ~10 seconds
+                                try { playCollectSound(); } catch (e) {}
+                            }
+                        }
+                        // Cakes (collect)
+                        else if (obs.type === 'cake') {
+                            obs.markedForDeletion = true;
+                            this.score++;
+                            this.updateScore();
+                            this.spawnParticles(obs.x + obs.width / 2, obs.y + obs.height / 2, '#ffd700');
+                            try { playCollectSound(); } catch (e) {}
+                            if (this.score >= 20) this.win();
+                        }
+                        // Enemies (standard, flying, chaser)
+                        else if (obs.type === 'enemy' || obs.type === 'flying' || obs.type === 'chaser') {
+                            if (this.shieldActive) {
+                                // consume shield and remove obstacle
+                                this.shieldActive = false;
+                                this.shieldTimer = 0;
+                                obs.markedForDeletion = true;
+                                try { playCollectSound(); } catch (e) {}
+                            } else {
+                                try { playHitSound(); } catch (e) {}
+                                this.gameOver();
+                            }
+                        }
+                    }
+                });
+
+                this.obstacles = this.obstacles.filter(obs => !obs.markedForDeletion);
+
+                // Particles update + cleanup
+                this.particles.forEach(p => p.update());
+                this.particles = this.particles.filter(p => p.life > 0);
+            }
+
+            draw() {
+                // Draw Background (Office Floor)
+                // subtle sky overlay is already set by canvas background gradient
+
+                // Clouds (parallax)
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                this.clouds.forEach(c => {
+                    ctx.beginPath();
+                    ctx.ellipse(c.x, c.y, c.r * 1.6, c.r, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Floor
+                ctx.fillStyle = "#444";
+                ctx.fillRect(0, HEIGHT - 20, WIDTH, 20);
+
+                // Entities
+                this.player.draw();
+                this.obstacles.forEach(obs => obs.draw());
+
+                // Particles
+                this.particles.forEach(p => p.draw());
+            }
+
+            spawnParticles(x, y, color) {
+                for (let i = 0; i < 16; i++) {
+                    this.particles.push(new Particle(x + (Math.random() - 0.5) * 20, y + (Math.random() - 0.5) * 20, color));
+                }
+            }
+        }
+
+        // `game` will be initialized after the classes so avatar and UI can bind first
+        let game;
+
+        // Simple particle system for collect effects
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = Math.random() * -3 - 1;
+                this.size = Math.random() * 4 + 2;
+                this.life = 60;
+                this.color = color || '#ffd700';
+            }
+
+            update() {
+                this.vy += 0.12;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+            }
+
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life / 60);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function animate() {
+            if (!game || !game.isRunning) return;
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            game.update();
+            game.draw();
+            requestAnimationFrame(animate);
+        }
+
+    </script>
+</body>
+</html>
