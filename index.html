@@ -33,18 +33,11 @@
             box-shadow: 0 0 50px rgba(0, 255, 204, 0.2);
             border: 4px solid var(--accent);
             border-radius: 8px;
-            display: inline-block;
         }
 
         canvas {
             display: block;
             background: linear-gradient(to bottom, #2b32b2, #1488cc); /* Sky gradient */
-            touch-action: none;
-        }
-
-        @media (max-width: 600px) {
-            #hud { font-size: 14px; top: 8px; left: 8px; }
-            .ui-layer { padding: 12px; }
         }
 
         /* UI OVERLAYS */
@@ -123,22 +116,22 @@
         </div>
 
         <div id="startScreen" class="ui-layer">
-            <h1>LEVEL: UNEMPLOYED FINAL BOSS</h1>
-            <p>Help <b>Birthday Boy Shumail</b> collect Job Offers and dodge the Rejection Letters.</p>
+            <h1>LEVEL: UNEMPLOYED<br>FINAL BOSS</h1>
+            <p>Help <b>Birthday Boy Shumail</b> collect Job Offers (🎂) and dodge the Rejection Letters (📄).</p>
             <div style="display:flex;gap:12px;flex-direction:column;align-items:center;">
                 <button class="btn" id="startBtn">START GRINDING</button>
             </div>
         </div>
 
         <div id="gameOverScreen" class="ui-layer hidden">
-            <h1 style="color: var(--danger)">Disappointed</h1>
+            <h1 style="color: var(--danger)">REJECTED!</h1>
             <p>Rejection Letter Received.</p>
             <button class="btn" onclick="game.reset()">APPLY AGAIN</button>
         </div>
 
         <div id="winScreen" class="ui-layer hidden">
             <h1 style="color: gold">Ronaldo is the Goat</h1>
-            <p>SSSSSSSUUUUUUUIIIIIIIIIIIIII</p>
+            <p>SSSSUUUUIIIIIIIII</p>
             <button class="btn" onclick="game.reset()">PLAY AGAIN</button>
         </div>
 
@@ -156,37 +149,8 @@
         const HEIGHT = 450;
         const GRAVITY = 0.6;
         
-        // logical game resolution stays constant for physics (800x450)
-        // the displayed size and pixel buffer are adjusted for devicePixelRatio
         canvas.width = WIDTH;
         canvas.height = HEIGHT;
-
-        function fitCanvas() {
-            const dpr = window.devicePixelRatio || 1;
-            // compute CSS size constrained to the full viewport while preserving aspect
-            const maxCssW = window.innerWidth;
-            const maxCssH = window.innerHeight;
-            let cssW = maxCssW;
-            let cssH = Math.round(cssW * HEIGHT / WIDTH);
-            if (cssH > maxCssH) {
-                cssH = maxCssH;
-                cssW = Math.round(cssH * WIDTH / HEIGHT);
-            }
-
-            canvas.style.width = cssW + 'px';
-            canvas.style.height = cssH + 'px';
-
-            // pixel buffer scaled by DPR while keeping logical coords as WIDTH/HEIGHT
-            canvas.width = Math.round(WIDTH * dpr);
-            canvas.height = Math.round(HEIGHT * dpr);
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-            const container = document.getElementById('game-container');
-            if (container) {
-                container.style.width = canvas.style.width;
-                container.style.height = canvas.style.height;
-            }
-        }
 
         // Preload default avatar from shipped file
         const defaultAvatar = new Image();
@@ -232,46 +196,15 @@
         window.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); keys.space = true; } });
         window.addEventListener('keyup', e => { if (e.code === 'Space') { e.preventDefault(); keys.space = false; } });
 
-        // pointer/touch-friendly input: tap/click canvas to jump
-        canvas.addEventListener('pointerdown', e => {
-            // only respond to primary button for mouse
-            if (e.pointerType === 'mouse' && e.button !== 0) return;
-            e.preventDefault();
-            keys.space = true;
-            unlockAudio();
-        });
-        canvas.addEventListener('pointerup', e => { e.preventDefault(); keys.space = false; });
-        canvas.addEventListener('pointercancel', e => { keys.space = false; });
-        // ensure pointerup anywhere clears the jump (helps on mobile)
-        document.addEventListener('pointerup', () => { keys.space = false; });
-
         // Start button binding (use shipped avatar only) — also unlock audio on user gesture
         document.addEventListener('DOMContentLoaded', () => {
             const startBtn = document.getElementById('startBtn');
-            startBtn.addEventListener('click', async () => {
+            startBtn.addEventListener('click', () => {
                 unlockAudio();
                 if (!game) game = new Game();
                 if (!game.avatar && typeof defaultAvatar !== 'undefined') game.avatar = defaultAvatar;
-                // Request fullscreen then try to lock orientation to landscape (works in many mobile browsers when in fullscreen)
-                try {
-                    const gc = document.getElementById('game-container');
-                    if (gc && gc.requestFullscreen) await gc.requestFullscreen();
-                } catch (e) {}
-                try {
-                    if (screen.orientation && screen.orientation.lock) {
-                        await screen.orientation.lock('landscape').catch(() => {});
-                    } else if (screen.lockOrientation) {
-                        try { screen.lockOrientation('landscape'); } catch (e) {}
-                    }
-                } catch (e) {}
-
-                fitCanvas();
                 game.start();
             });
-
-            // initial canvas sizing and wire resize
-            fitCanvas();
-            window.addEventListener('resize', fitCanvas);
         });
 
         // --- CLASSES ---
